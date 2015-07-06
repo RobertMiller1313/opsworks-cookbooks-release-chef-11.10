@@ -34,13 +34,15 @@ defaults
   <% end %>
   option          abortonclose                                      # enable early dropping of aborted requests from pending queue
   option          httpchk                                           # enable HTTP protocol to check on servers health
+  option forwardfor
+  option  contstats
   <% if node[:haproxy][:enable_stats] -%>
   stats auth <%= node[:haproxy][:stats_user] %>:<%= node[:haproxy][:stats_password] %>
   stats uri <%= node[:haproxy][:stats_url] %>
   <% end -%>
 
 # Set up application listeners here.
-<% if node[:haproxy][:rails_backends].blank? && [:ws_backends].blank? && node[:haproxy][:php_backends].blank? && node[:haproxy][:nodejs_backends].blank? && node[:haproxy][:static_backends].blank? && node[:haproxy][:java_backends].blank? -%>
+<% if node[:haproxy][:rails_backends].blank? && node[:haproxy][:php_backends].blank? && node[:haproxy][:nodejs_backends].blank? && node[:haproxy][:static_backends].blank? && node[:haproxy][:java_backends].blank? -%>
 listen application 0.0.0.0:80
   # configure a fake backend as long as there are no real ones
   # this way HAProxy will not fail on a config check
@@ -48,10 +50,10 @@ listen application 0.0.0.0:80
   server localhost 127.0.0.1:8080 weight 1 maxconn 5 check
 <% else -%>
 
-<% if !node[:haproxy][:ws_backends].empty? -%>
-backend ws_app_servers
+<% if !node[:haproxy][:php_backends].empty? -%>
+backend php_app_servers
   balance <%= node[:haproxy][:balance] %>
-  <% node[:haproxy][:ws_backends].each do |backend| -%>
+  <% node[:haproxy][:php_backends].each do |backend| -%>
   server <%= backend['name'] %> <%= backend['ip'] %>:8080 weight <%= backend['backends'] || 10 %> maxconn <%= backend['backends'] * node[:haproxy][:maxcon_factor_ws_app] %> check inter <%= node[:haproxy][:check_interval] %>
   <% end -%>
 <% end -%>
@@ -222,18 +224,6 @@ frontend http-in
     <% end -%>
   <% end -%>
 
-  <% unless node[:haproxy][:ws_applications].empty? || node[:haproxy][:ws_backends].empty? -%>
-    <% node[:haproxy][:ws_applications].each do |app_name, app_config| -%>
-      <% app_config['domains'].each do |domain| -%>
-        <% if app_config['mounted_at'] -%>
-  use_backend ws_app_servers if ws_application_<%= app_name %>_domain_<%= domain.gsub(/[^\w.:-]/, '_') %> ws_application_<%= app_name %>_domain_<%= domain %>_path
-        <% else -%>
-  use_backend ws_app_servers if ws_application_<%= app_name %>_domain_<%= domain.gsub(/[^\w.:-]/, '_') %>
-        <% end -%>
-      <% end -%>
-    <% end -%>
-  <% end -%>
-
   <% unless node[:haproxy][:nodejs_applications].empty? || node[:haproxy][:nodejs_backends].empty? -%>
     <% node[:haproxy][:nodejs_applications].each do |app_name, app_config| -%>
       <% app_config['domains'].each do |domain| -%>
@@ -284,17 +274,17 @@ frontend http-in
 
 frontend ws-in
     bind :8080
-    default_backend ws_app_servers
+    default_backend php_app_servers
     ## routing based on Host header
     acl host_ws hdr_beg(Host) -i ws
-    use_backend ws_app_servers if host_ws
+    use_backend php_app_servers if host_ws
     ## routing based on websocket protocol header
     acl hdr_connection_upgrade hdr(Connection)  -i upgrade
     acl hdr_upgrade_websocket  hdr(Upgrade)     -i websocket
-    use_backend ws_app_servers if hdr_connection_upgrade hdr_upgrade_websocket
+    use_backend php_app_servers if hdr_connection_upgrade hdr_upgrade_websocket
 
     # all domains of WebSockets applications
-    <% node[:haproxy][:ws_applications].each do |app_name, app_config| -%>
+    <% node[:haproxy][:php_applications].each do |app_name, app_config| -%>
       <% app_config['domains'].each do |domain| -%>
     acl ws_application_<%= app_name %>_domain_<%= domain.gsub(/[^\w.:-]/, '_') %> hdr_end(host) -i <%= domain %>
         <% if app_config['mounted_at'] -%>
@@ -303,8 +293,8 @@ frontend ws-in
       <% end -%>
     <% end -%>
 
-  <% if !node[:haproxy][:ws_backends].empty? -%>
-  default_backend ws_app_servers
+  <% if !node[:haproxy][:php_backends].empty? -%>
+  default_backend php_app_servers
   <% elsif !node[:haproxy][:rails_backends].empty? -%>
   default_backend rails_app_servers
   <% elsif !node[:haproxy][:php_backends].empty? -%>
