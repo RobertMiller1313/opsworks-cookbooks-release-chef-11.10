@@ -75,6 +75,7 @@ backend rails_app_servers_ssl
 <% if !node[:haproxy][:php_backends].empty? -%>
 backend php_app_servers
   balance <%= node[:haproxy][:balance] %>
+  timeout queue 5000
   option redispatch
   option forwardfor
   option httpchk <%= node[:haproxy][:health_check_method] %> <%= node[:haproxy][:health_check_url] %>
@@ -267,22 +268,10 @@ frontend http-in
 
 frontend ws-in
   bind :8080
-  default_backend php_app_servers
   ## routing based on Host header
-  acl host_ws hdr_beg(Host) -i ws
+  acl is_websocket hdr_beg(Host) -i ws
   ## routing based on websocket protocol header
-  acl hdr_connection_upgrade hdr(Connection)  -i upgrade
-  acl hdr_upgrade_websocket  hdr(Upgrade)     -i websocket
-
-  # all domains of WebSockets applications
-  <% node[:haproxy][:php_applications].each do |app_name, app_config| -%>
-    <% app_config['domains'].each do |domain| -%>
-  acl php_application_<%= app_name %>_domain_<%= domain.gsub(/[^\w.:-]/, '_') %> hdr_end(host) -i <%= domain %>
-      <% if app_config['mounted_at'] -%>
-  acl php_application_<%= app_name %>_domain_<%= domain.gsub(/[^\w.:-]/, '_') %>_path path_beg <%= app_config['mounted_at'] %>
-      <% end -%>
-    <% end -%>
-  <% end -%>
+  acl is_websocket hdr(Upgrade) -i WebSocket
 
   <% if !node[:haproxy][:php_backends].empty? -%>
   default_backend php_app_servers
