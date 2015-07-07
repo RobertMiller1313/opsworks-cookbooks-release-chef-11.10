@@ -277,12 +277,12 @@ frontend ws-in
     bind :8000
     default_backend php_app_servers
     ## routing based on Host header
-    acl host_ws hdr_beg(Host) -i ws
-    use_backend php_app_servers if host_ws
+    ##acl host_ws hdr_beg(Host) -i ws
+    ##use_backend php_app_servers if host_ws
     ## routing based on websocket protocol header
-    acl hdr_connection_upgrade hdr(Connection)  -i upgrade
-    acl hdr_upgrade_websocket  hdr(Upgrade)     -i websocket
-    use_backend php_app_servers if hdr_connection_upgrade hdr_upgrade_websocket
+    ##acl hdr_connection_upgrade hdr(Connection)  -i upgrade
+    ##acl hdr_upgrade_websocket  hdr(Upgrade)     -i websocket
+    ##use_backend php_app_servers if hdr_connection_upgrade hdr_upgrade_websocket
 
     # all domains of WebSockets applications
     <% node[:haproxy][:php_applications].each do |app_name, app_config| -%>
